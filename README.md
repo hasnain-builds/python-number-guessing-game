@@ -30,6 +30,3 @@ This project focuses on core Python logic, error handling, and clean code struct
 
 ```bash
 python main.py
-
-📌Author 
-Hasnain Sheikh
