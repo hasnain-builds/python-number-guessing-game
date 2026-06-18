@@ -7,7 +7,6 @@ const CONFIG = {
 const STORAGE_KEYS = {
   settings: 'neon-oracle-settings',
   stats: 'neon-oracle-stats',
-  reviews: 'neon-oracle-reviews',
 };
 
 const DEFAULT_SETTINGS = {
@@ -80,17 +79,6 @@ const dom = {
   modalClose: document.getElementById('modal-close'),
   aboutModal: document.getElementById('about-modal'),
   aboutClose: document.getElementById('about-close'),
-  openReview: document.getElementById('open-review'),
-  reviewModal: document.getElementById('review-modal'),
-  reviewClose: document.getElementById('review-close'),
-  reviewCloseSecondary: document.getElementById('review-close-secondary'),
-  reviewForm: document.getElementById('review-form'),
-  reviewFeedback: document.getElementById('review-feedback'),
-  reviewStatus: document.getElementById('review-status'),
-  saveReview: document.getElementById('save-review'),
-  reviewAverage: document.getElementById('review-average'),
-  reviewTotal: document.getElementById('review-total'),
-  reviewStars: Array.from(document.querySelectorAll('.review-star')),
   victoryScreen: document.getElementById('victory-screen'),
   victoryTitle: document.getElementById('victory-title'),
   victoryMeta: document.getElementById('victory-meta'),
@@ -106,6 +94,11 @@ const dom = {
   difficultyButtons: Array.from(document.querySelectorAll('[data-difficulty]')),
   guessTemplate: document.getElementById('guess-template'),
   socialButtons: Array.from(document.querySelectorAll('[data-social]')),
+  menuToggle: document.getElementById('menu-toggle'),
+  mobileMenu: document.getElementById('mobile-menu'),
+  mobileOpenAbout: document.getElementById('mobile-open-about'),
+  mobileThemeToggle: document.getElementById('mobile-theme-toggle'),
+  mobileSoundToggle: document.getElementById('mobile-sound-toggle'),
 };
 
 const soundContext = window.AudioContext ? new AudioContext() : null;
@@ -113,7 +106,6 @@ const soundContext = window.AudioContext ? new AudioContext() : null;
 const appState = {
   settings: loadJSON(STORAGE_KEYS.settings, DEFAULT_SETTINGS),
   stats: loadJSON(STORAGE_KEYS.stats, DEFAULT_STATS),
-  reviews: loadList(STORAGE_KEYS.reviews),
   difficulty: 'medium',
   selectedDifficulty: null,
   min: CONFIG.medium.min,
@@ -124,7 +116,6 @@ const appState = {
   guessHistory: [],
   roundOver: false,
   locked: false,
-  reviewRating: 0,
 };
 
 function loadJSON(key, fallback) {
@@ -134,17 +125,6 @@ function loadJSON(key, fallback) {
     return { ...structuredClone(fallback), ...JSON.parse(raw) };
   } catch {
     return structuredClone(fallback);
-  }
-}
-
-function loadList(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
   }
 }
 
@@ -172,20 +152,18 @@ function syncStats() {
   saveJSON(STORAGE_KEYS.stats, appState.stats);
 }
 
-function syncReviews() {
-  saveJSON(STORAGE_KEYS.reviews, appState.reviews);
-}
-
 function setTheme(theme) {
   appState.settings.theme = theme;
   document.documentElement.dataset.theme = theme;
-  dom.themeToggle.setAttribute('aria-pressed', String(theme === 'light'));
+  if (dom.themeToggle) dom.themeToggle.setAttribute('aria-pressed', String(theme === 'light'));
+  if (dom.mobileThemeToggle) dom.mobileThemeToggle.setAttribute('aria-pressed', String(theme === 'light'));
   syncSettings();
 }
 
 function setSound(enabled) {
   appState.settings.soundOn = enabled;
-  dom.soundToggle.setAttribute('aria-pressed', String(enabled));
+  if (dom.soundToggle) dom.soundToggle.setAttribute('aria-pressed', String(enabled));
+  if (dom.mobileSoundToggle) dom.mobileSoundToggle.setAttribute('aria-pressed', String(enabled));
   syncSettings();
 }
 
@@ -265,16 +243,6 @@ function updateStats() {
   updateDifficultyStats();
   updateBadges();
   syncStats();
-}
-
-function updateReviewSummary() {
-  const totalReviews = appState.reviews.length;
-  const averageRating = totalReviews
-    ? appState.reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / totalReviews
-    : 0;
-
-  dom.reviewAverage.textContent = `${averageRating.toFixed(1)} / 5`;
-  dom.reviewTotal.textContent = String(totalReviews);
 }
 
 function updateBadges() {
@@ -473,26 +441,7 @@ function showModal({ kicker, title, body, actions }) {
   playSound('gameover');
 }
 
-function setReviewRating(rating) {
-  appState.reviewRating = rating;
-  dom.saveReview.disabled = rating < 1;
-  dom.reviewStatus.textContent = rating ? `Selected ${rating} star${rating === 1 ? '' : 's'}.` : 'Choose a rating to continue.';
-
-  dom.reviewStars.forEach((button) => {
-    const active = Number(button.dataset.rating) <= rating;
-    button.classList.toggle('selected', active);
-    button.setAttribute('aria-pressed', String(active));
-  });
-}
-
-function resetReviewForm() {
-  appState.reviewRating = 0;
-  dom.reviewFeedback.value = '';
-  setReviewRating(0);
-}
-
 function showAboutModal() {
-  updateReviewSummary();
   dom.aboutModal.hidden = false;
   dom.aboutModal.setAttribute('aria-hidden', 'false');
   dom.openAbout.setAttribute('aria-expanded', 'true');
@@ -506,49 +455,10 @@ function hideAboutModal() {
   dom.openAbout.focus();
 }
 
-function showReviewModal() {
-  resetReviewForm();
-  dom.reviewModal.hidden = false;
-  dom.reviewModal.setAttribute('aria-hidden', 'false');
-  dom.reviewStatus.textContent = 'Choose a rating to continue.';
-  dom.reviewStars[0].focus();
-}
-
-function hideReviewModal() {
-  dom.reviewModal.hidden = true;
-  dom.reviewModal.setAttribute('aria-hidden', 'true');
-  dom.reviewStatus.textContent = '';
-  if (!dom.aboutModal.hidden) {
-    dom.openReview.focus();
-  } else {
-    dom.openAbout.focus();
-  }
-}
-
 function openSocialLink(network) {
   const url = SOCIAL_LINKS[network];
   if (!url) return;
   window.open(url, '_blank', 'noopener,noreferrer');
-}
-
-function saveReview(event) {
-  event.preventDefault();
-
-  if (appState.reviewRating < 1) {
-    dom.reviewStatus.textContent = 'Please choose a rating before saving.';
-    return;
-  }
-
-  appState.reviews.unshift({
-    rating: appState.reviewRating,
-    feedback: dom.reviewFeedback.value.trim(),
-    createdAt: new Date().toISOString(),
-  });
-
-  syncReviews();
-  updateReviewSummary();
-  dom.reviewStatus.textContent = 'Review saved locally.';
-  hideReviewModal();
 }
 
 function hideModal() {
@@ -834,19 +744,7 @@ function wireEvents() {
     openHelpModal();
   });
   dom.aboutClose.addEventListener('click', hideAboutModal);
-  dom.openReview.addEventListener('click', () => {
-    ensureAudioReady();
-    playSound('click');
-    showReviewModal();
-  });
-  dom.reviewClose.addEventListener('click', hideReviewModal);
-  dom.reviewCloseSecondary.addEventListener('click', hideReviewModal);
-  dom.reviewForm.addEventListener('submit', saveReview);
-  dom.reviewStars.forEach((button) => {
-    button.addEventListener('click', () => {
-      setReviewRating(Number(button.dataset.rating));
-    });
-  });
+
   dom.socialButtons.forEach((button) => {
     button.addEventListener('click', () => {
       ensureAudioReady();
@@ -854,6 +752,61 @@ function wireEvents() {
       openSocialLink(button.dataset.social);
     });
   });
+  const toggleMenu = (expanded) => {
+    const isExpanded = expanded !== undefined ? expanded : dom.menuToggle.getAttribute('aria-expanded') === 'true';
+    const nextState = !isExpanded;
+    dom.menuToggle.setAttribute('aria-expanded', String(nextState));
+    if (nextState) {
+      dom.mobileMenu.hidden = false;
+      void dom.mobileMenu.offsetWidth;
+      dom.mobileMenu.classList.add('is-active');
+    } else {
+      dom.mobileMenu.classList.remove('is-active');
+      const transitionHandler = () => {
+        if (!dom.mobileMenu.classList.contains('is-active')) {
+          dom.mobileMenu.hidden = true;
+        }
+        dom.mobileMenu.removeEventListener('transitionend', transitionHandler);
+      };
+      dom.mobileMenu.addEventListener('transitionend', transitionHandler);
+    }
+  };
+
+  if (dom.menuToggle) {
+    dom.menuToggle.addEventListener('click', () => {
+      ensureAudioReady();
+      playSound('click');
+      toggleMenu();
+    });
+  }
+
+  if (dom.mobileOpenAbout) {
+    dom.mobileOpenAbout.addEventListener('click', () => {
+      ensureAudioReady();
+      playSound('click');
+      toggleMenu(true);
+      showAboutModal();
+    });
+  }
+
+  if (dom.mobileThemeToggle) {
+    dom.mobileThemeToggle.addEventListener('click', () => {
+      ensureAudioReady();
+      playSound('click');
+      setTheme(appState.settings.theme === 'dark' ? 'light' : 'dark');
+      toggleMenu(true);
+    });
+  }
+
+  if (dom.mobileSoundToggle) {
+    dom.mobileSoundToggle.addEventListener('click', () => {
+      ensureAudioReady();
+      playSound('click');
+      setSound(!appState.settings.soundOn);
+      toggleMenu(true);
+    });
+  }
+
   dom.soundToggle.addEventListener('click', () => {
     ensureAudioReady();
     playSound('click');
@@ -905,10 +858,6 @@ function wireEvents() {
 
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
-      if (!dom.reviewModal.hidden) {
-        hideReviewModal();
-        return;
-      }
       if (!dom.aboutModal.hidden) {
         hideAboutModal();
         return;
@@ -927,7 +876,6 @@ function init() {
   setSelectedDifficulty(appState.selectedDifficulty);
   syncSettings();
   updateStats();
-  updateReviewSummary();
   spawnParticles();
   wireEvents();
   setGuessingEnabled(false);
